@@ -1,6 +1,9 @@
-# Real-Time Multi-Camera Person Detection & Re-Identification
+# Multi-Camera Person Detection & Re-Identification
 
 A modular, production-ready person tracking system built with YOLO11, part-based Re-Identification (ReID), Kalman filtering, Hungarian assignment, and a persistent Track Gallery. Deployed as an interactive Streamlit web application.
+
+**Live demo:**  https://person-reid-multicamera.streamlit.app/
+
 
 ---
 

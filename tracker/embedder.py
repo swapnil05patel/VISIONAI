@@ -14,16 +14,27 @@ Usage:
     gallery_embed = embedder.compute_weighted_mean(part_embeds, weights)
 """
 
+import sys
+from pathlib import Path
+from typing import List, Optional
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as T
-import cv2
-from typing import List, Optional
 
-from tracker.config import NUM_PARTS
-from tracker.utils import l2_normalize_vec
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from tracker.config import NUM_PARTS
+    from tracker.utils import l2_normalize_vec
+except (ImportError, ModuleNotFoundError):
+    from config import NUM_PARTS
+    from utils import l2_normalize_vec
+
 
 
 class PartEmbedder:

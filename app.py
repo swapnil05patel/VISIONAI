@@ -12,8 +12,14 @@ All tracking logic lives in tracker/.
 All UI logic lives in ui/.
 """
 
+import sys
 import warnings
+from pathlib import Path
 import streamlit as st
+
+_PROJECT_ROOT = Path(__file__).resolve().parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Suppress protobuf version warnings from Google libraries
 warnings.filterwarnings("ignore", message=".*Protobuf gencode version.*")
@@ -23,6 +29,8 @@ from ui.sidebar import render_sidebar
 from ui.uploader import render_uploader
 from ui.results import render_results
 from ui.pipeline import cleanup_temp_files
+
+
 
 
 # ------------------------------------------------------------------

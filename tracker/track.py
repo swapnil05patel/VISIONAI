@@ -14,29 +14,55 @@ A track stores:
 """
 
 import math
+import sys
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
 
-from tracker.config import (
-    EMBED_CACHE_SIZE,
-    MIN_HITS_TO_CONFIRM,
-    SMOOTH_ALPHA_SLOW,
-    SMOOTH_ALPHA_FAST,
-    EXIT_MARGIN,
-    STATIC_VELOCITY_THRESH,
-    STATIC_DISPLACEMENT_THRESH,
-    STATIC_FRAMES_REQUIRED,
-)
-from tracker.kalman import KalmanBox
-from tracker.utils import (
-    box_xyxy_to_xywh,
-    box_xywh_to_xyxy,
-    l2_normalize_vec,
-    center_of,
-)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from tracker.config import (
+        EMBED_CACHE_SIZE,
+        MIN_HITS_TO_CONFIRM,
+        SMOOTH_ALPHA_SLOW,
+        SMOOTH_ALPHA_FAST,
+        EXIT_MARGIN,
+        STATIC_VELOCITY_THRESH,
+        STATIC_DISPLACEMENT_THRESH,
+        STATIC_FRAMES_REQUIRED,
+    )
+    from tracker.kalman import KalmanBox
+    from tracker.utils import (
+        box_xyxy_to_xywh,
+        box_xywh_to_xyxy,
+        l2_normalize_vec,
+        center_of,
+    )
+except (ImportError, ModuleNotFoundError):
+    from config import (
+        EMBED_CACHE_SIZE,
+        MIN_HITS_TO_CONFIRM,
+        SMOOTH_ALPHA_SLOW,
+        SMOOTH_ALPHA_FAST,
+        EXIT_MARGIN,
+        STATIC_VELOCITY_THRESH,
+        STATIC_DISPLACEMENT_THRESH,
+        STATIC_FRAMES_REQUIRED,
+    )
+    from kalman import KalmanBox
+    from utils import (
+        box_xyxy_to_xywh,
+        box_xywh_to_xyxy,
+        l2_normalize_vec,
+        center_of,
+    )
+
 
 
 class Track:

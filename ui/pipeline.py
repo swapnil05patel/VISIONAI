@@ -11,9 +11,11 @@ run_tracking_pipeline():
 """
 
 import os
+import sys
 import time
 import uuid
 import tempfile
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -21,6 +23,10 @@ import torch
 import pandas as pd
 import streamlit as st
 from ultralytics import YOLO
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from tracker.config import (
     HIGH_CONF_THR,
@@ -32,6 +38,8 @@ from tracker.config import (
     MIN_HITS_TO_CONFIRM,
 )
 from tracker.reid_tracker import PersonReIDTracker
+
+
 
 
 @st.cache_resource

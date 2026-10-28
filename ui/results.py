@@ -10,9 +10,17 @@ Displays four tabs:
 """
 
 import os
+import sys
+from pathlib import Path
 import streamlit as st
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from tracker.config import EMBED_CACHE_SIZE
+
+
 
 
 def render_results():

@@ -5,9 +5,17 @@ Renders the video upload panel, preview, and the process button.
 Triggers run_tracking_pipeline() when the user clicks Start Tracking.
 """
 
+import sys
+from pathlib import Path
 import streamlit as st
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from ui.pipeline import run_tracking_pipeline, cleanup_temp_files, cleanup_old_tracked_videos
+
+
 
 
 def render_uploader(settings: dict):

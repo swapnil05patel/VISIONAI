@@ -24,39 +24,74 @@ Pipeline per frame (in order):
 """
 
 import math
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from tracker.config import (
-    DEVICE,
-    NUM_PARTS,
-    IOU_THR,
-    REID_STRICT_THRESH,
-    REID_REATTACH_MAX_AGE,
-    REID_CENTER_MAX_DIST_BASE,
-    VELOCITY_GATE_MULTIPLIER,
-    REID_AREA_RATIO_MAX,
-    MATCH_WEIGHT_IOU,
-    MATCH_WEIGHT_REID,
-    MATCH_WEIGHT_DIRECTION,
-    DIRECTION_SPEED_THRESH,
-    FALLBACK_IOU_FOR_NEW,
-    FALLBACK_CENTER_MAX_DIST_BASE,
-    MAX_FALLBACK_MISSES,
-    MAX_AGE,
-    MIN_HITS_TO_CONFIRM,
-    EXIT_MIN_MISSES,
-    HARD_RETIRE_ON_EXIT,
-    GALLERY_EVICT_INTERVAL,
-)
-from tracker.embedder import PartEmbedder
-from tracker.track import Track
-from tracker.gallery import TrackGallery
-from tracker.utils import iou, cosine_distance_vec, center_of, box_area, l2_normalize_vec
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from tracker.config import (
+        DEVICE,
+        NUM_PARTS,
+        IOU_THR,
+        REID_STRICT_THRESH,
+        REID_REATTACH_MAX_AGE,
+        REID_CENTER_MAX_DIST_BASE,
+        VELOCITY_GATE_MULTIPLIER,
+        REID_AREA_RATIO_MAX,
+        MATCH_WEIGHT_IOU,
+        MATCH_WEIGHT_REID,
+        MATCH_WEIGHT_DIRECTION,
+        DIRECTION_SPEED_THRESH,
+        FALLBACK_IOU_FOR_NEW,
+        FALLBACK_CENTER_MAX_DIST_BASE,
+        MAX_FALLBACK_MISSES,
+        MAX_AGE,
+        MIN_HITS_TO_CONFIRM,
+        EXIT_MIN_MISSES,
+        HARD_RETIRE_ON_EXIT,
+        GALLERY_EVICT_INTERVAL,
+    )
+    from tracker.embedder import PartEmbedder
+    from tracker.track import Track
+    from tracker.gallery import TrackGallery
+    from tracker.utils import iou, cosine_distance_vec, center_of, box_area, l2_normalize_vec
+except (ImportError, ModuleNotFoundError):
+    from config import (
+        DEVICE,
+        NUM_PARTS,
+        IOU_THR,
+        REID_STRICT_THRESH,
+        REID_REATTACH_MAX_AGE,
+        REID_CENTER_MAX_DIST_BASE,
+        VELOCITY_GATE_MULTIPLIER,
+        REID_AREA_RATIO_MAX,
+        MATCH_WEIGHT_IOU,
+        MATCH_WEIGHT_REID,
+        MATCH_WEIGHT_DIRECTION,
+        DIRECTION_SPEED_THRESH,
+        FALLBACK_IOU_FOR_NEW,
+        FALLBACK_CENTER_MAX_DIST_BASE,
+        MAX_FALLBACK_MISSES,
+        MAX_AGE,
+        MIN_HITS_TO_CONFIRM,
+        EXIT_MIN_MISSES,
+        HARD_RETIRE_ON_EXIT,
+        GALLERY_EVICT_INTERVAL,
+    )
+    from embedder import PartEmbedder
+    from track import Track
+    from gallery import TrackGallery
+    from utils import iou, cosine_distance_vec, center_of, box_area, l2_normalize_vec
+
 
 
 class PersonReIDTracker:

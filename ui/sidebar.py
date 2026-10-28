@@ -5,8 +5,14 @@ Renders the Streamlit sidebar with all configurable tracking parameters.
 Returns a settings dict passed directly into the tracking pipeline.
 """
 
+import sys
+from pathlib import Path
 import streamlit as st
 import torch
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from tracker.config import (
     HIGH_CONF_THR,
@@ -20,6 +26,8 @@ from tracker.config import (
     NUM_PARTS,
     EMBED_CACHE_SIZE,
 )
+
+
 
 
 def render_sidebar() -> dict:

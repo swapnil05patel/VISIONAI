@@ -28,20 +28,38 @@ Gallery structure per entry:
 """
 
 import math
+import sys
 import time
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
 
-from tracker.config import (
-    GALLERY_COSINE_THRESH,
-    GALLERY_TTL_SECONDS,
-    GALLERY_MAX_SIZE,
-    GALLERY_MIN_HITS,
-    REID_CENTER_MAX_DIST_BASE,
-    REID_AREA_RATIO_MAX,
-)
-from tracker.utils import cosine_distance_vec, center_of, box_area
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from tracker.config import (
+        GALLERY_COSINE_THRESH,
+        GALLERY_TTL_SECONDS,
+        GALLERY_MAX_SIZE,
+        GALLERY_MIN_HITS,
+        REID_CENTER_MAX_DIST_BASE,
+        REID_AREA_RATIO_MAX,
+    )
+    from tracker.utils import cosine_distance_vec, center_of, box_area
+except (ImportError, ModuleNotFoundError):
+    from config import (
+        GALLERY_COSINE_THRESH,
+        GALLERY_TTL_SECONDS,
+        GALLERY_MAX_SIZE,
+        GALLERY_MIN_HITS,
+        REID_CENTER_MAX_DIST_BASE,
+        REID_AREA_RATIO_MAX,
+    )
+    from utils import cosine_distance_vec, center_of, box_area
+
 
 
 class TrackGallery:

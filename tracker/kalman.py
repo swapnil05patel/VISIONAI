@@ -11,8 +11,19 @@ from previous observations. It corrects the prediction when a new
 measurement (detection) is available.
 """
 
+import sys
+from pathlib import Path
 import numpy as np
-from tracker.config import KALMAN_PROCESS_NOISE, KALMAN_MEAS_NOISE
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from tracker.config import KALMAN_PROCESS_NOISE, KALMAN_MEAS_NOISE
+except (ImportError, ModuleNotFoundError):
+    from config import KALMAN_PROCESS_NOISE, KALMAN_MEAS_NOISE
+
 
 
 class KalmanBox:

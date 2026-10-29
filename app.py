@@ -29,6 +29,7 @@ from ui.sidebar import render_sidebar
 from ui.uploader import render_uploader
 from ui.results import render_results
 from ui.pipeline import cleanup_temp_files
+from ui.person_search import render_person_search
 
 
 
@@ -75,19 +76,27 @@ if "processing" not in st.session_state:
 # ------------------------------------------------------------------
 
 st.title("Advanced Entry / Exit Tracker")
-st.markdown("*Person tracking with part-based ReID, Kalman filtering, and persistent track gallery.*")
+st.markdown(
+    "*Person tracking with part-based ReID, Kalman filtering, and persistent track gallery.*"
+)
 
 # Render sidebar and get settings dict
 settings = render_sidebar()
 
-# Two-column layout: upload controls (left) | results (right)
-col_upload, col_results = st.columns([1, 2])
+track_tab, search_tab = st.tabs(["Track an uploaded video", "Find a person in test videos"])
 
-with col_upload:
-    render_uploader(settings)
+with track_tab:
+    # Two-column layout: upload controls (left) | results (right)
+    col_upload, col_results = st.columns([1, 2])
 
-with col_results:
-    render_results()
+    with col_upload:
+        render_uploader(settings)
+
+    with col_results:
+        render_results()
+
+with search_tab:
+    render_person_search()
 
 
 # ------------------------------------------------------------------

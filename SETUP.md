@@ -2,6 +2,8 @@
 
 > **37 tests pass. All metrics are real. Everything runs on `main`.**
 
+> **Windows users:** follow the dedicated [Windows setup and demonstration guide](SETUP_WINDOWS.md).
+
 ---
 
 ## Do I Need to Train the Model?
@@ -132,7 +134,6 @@ person-reid-multicamera/
 ## 1. Clone and Enter the Project
 
 ```bash
-git clone https://github.com/prxsnn/person-reid-multicamera.git
 cd person-reid-multicamera
 ```
 
@@ -178,12 +179,12 @@ pip install -r requirements.txt
 
 ## 5. Download Model Weights
 
-### YOLO11m (39 MB) — auto-downloads on first run, or manually:
+### [YOLO11m (`yolo11m.pt`, 39 MB)](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m.pt) — auto-downloads on first run, or manually:
 ```bash
 wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11m.pt
 ```
 
-### OSNet-x0.25 MSMT17 (9 MB) — auto-downloads on first run, or manually:
+### [OSNet-x0.25 MSMT17 checkpoint (9 MB)](https://huggingface.co/kaiyangzhou/osnet/resolve/main/osnet_x0_25_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth) — auto-downloads on first run, or manually:
 ```bash
 mkdir -p weights
 wget -O weights/osnet_x0_25_msmt17.pth \
@@ -234,6 +235,11 @@ streamlit run app.py
 3. Click **Start Tracking**
 4. View results in 4 tabs: Video Output, Tracking Logs, Analytics, Algorithm Info
 5. Download annotated video or CSV log
+
+To search for an uploaded reference person across every sample video, open
+**Find a person in test videos**, upload a person image, and click
+**Search all test videos**. See [SETUP_WINDOWS.md](SETUP_WINDOWS.md) for a
+step-by-step demo using the included query images.
 
 **What the annotations mean:**
 

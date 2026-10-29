@@ -17,6 +17,7 @@ This is a research/engineering codebase. It is **not** claimed production-ready.
 - [Track Gallery](#track-gallery)
 - [Project Structure](#project-structure)
 - [Quick Start from GitHub](#quick-start-from-github)
+- [Windows Setup and Demonstration](#windows-setup-and-demonstration)
 - [Configuration](#configuration)
 - [Evaluation](#evaluation)
 - [Limitations](#limitations)
@@ -246,7 +247,12 @@ Alternatively, the model will be downloaded automatically on first run if you ha
 streamlit run app.py
 ```
 
-The app opens in your browser at `http://localhost:8501`. Upload a video, adjust settings in the sidebar if needed, and click **Start Tracking**.
+The app opens in your browser at `http://localhost:8501`. Choose **Track an uploaded video** to upload and track a clip. Choose **Find a person in test videos** to upload a reference image and search every video under `test_data/`; the results include matching time ranges and best-frame previews. A clear person crop works best, and appearance matching may return false positives or miss a person when clothing, lighting, or camera view differs.
+
+### Windows setup and demonstration
+
+For Windows 10/11 PowerShell installation steps, CPU PyTorch setup, and a
+step-by-step demo of both app tabs, see [SETUP_WINDOWS.md](SETUP_WINDOWS.md).
 
 ---
 

@@ -193,6 +193,11 @@ def parse_args():
 
 
 def load_frames_from_dir(frame_dir: Path, n_expected: Optional[int] = None):
+    """Load frames from a directory of images OR directly from a video file."""
+    frame_dir = Path(frame_dir)
+    # Accept a video file path directly
+    if frame_dir.is_file() and frame_dir.suffix.lower() in {".mp4", ".mov", ".avi", ".mkv"}:
+        return _load_frames_from_video(frame_dir)
     paths = _list_frames(frame_dir)
     frames = []
     for path in paths:
@@ -200,6 +205,21 @@ def load_frames_from_dir(frame_dir: Path, n_expected: Optional[int] = None):
         if img is None:
             continue
         frames.append(img)
+    return frames
+
+
+def _load_frames_from_video(video_path: Path) -> List[np.ndarray]:
+    """Read all frames from a video file into a list."""
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise FileNotFoundError(f"Cannot open video: {video_path}")
+    frames = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frames.append(frame)
+    cap.release()
     return frames
 
 

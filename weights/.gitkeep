@@ -1,0 +1,3 @@
+# Place OSNet and other model weights here.
+# See SETUP.md section 5 for download instructions.
+# Files in this directory are ignored by .gitignore (*.pth, *.pt).

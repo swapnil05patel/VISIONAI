@@ -6,3 +6,4 @@ ultralytics>=8.4.37
 scipy>=1.15.3
 torch>=2.5.1
 torchvision>=0.20.1
+pytest>=8.0.0

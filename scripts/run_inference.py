@@ -18,7 +18,7 @@ Usage
   # Video with custom thresholds
   python scripts/run_inference.py --input test_data/videos/sample.mp4 \
       --high-conf 0.50 --low-conf 0.15 --iou-thr 0.30 --reid-thr 0.45 \
-      --max-age 150 --min-hits 2
+      --max-age 150 --min-hits 2 --backbone osnet_x0_25
 """
 
 import argparse
@@ -45,6 +45,8 @@ from tracker.config import (
     MAX_AGE,
     MIN_HITS_TO_CONFIRM,
     NUM_PARTS,
+    REID_BACKBONE,
+    USE_PART_EMBEDDING,
 )
 from tracker.embedder import PartEmbedder
 from tracker.reid_tracker import PersonReIDTracker
@@ -135,6 +137,9 @@ def run_video(args):
         reid_strict_thresh = args.reid_thr,
         max_age            = args.max_age,
         min_hits           = args.min_hits,
+        backbone           = args.backbone,
+        use_part_embedding = args.use_part_embedding,
+        enable_gallery     = not args.disable_gallery,
     )
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -167,7 +172,12 @@ def run_video(args):
 
         all_boxes = results[0].boxes.data.cpu().numpy() if len(results[0].boxes.data) > 0 else np.empty((0, 6))
         high_mask = (all_boxes[:, 4] >= args.high_conf) if len(all_boxes) > 0 else np.array([], dtype=bool)
+        low_mask = (
+            (all_boxes[:, 4] >= args.low_conf) & (all_boxes[:, 4] < args.high_conf)
+            if len(all_boxes) > 0 else np.array([], dtype=bool)
+        )
         high_boxes = all_boxes[high_mask][:, :4] if high_mask.any() else np.empty((0, 4))
+        low_boxes = all_boxes[low_mask][:, :4] if low_mask.any() else np.empty((0, 4))
 
         detections  = []
         parts_feats = []
@@ -178,7 +188,13 @@ def run_video(args):
                 detections.append(box)
                 parts_feats.append(parts)
 
-        tracks = tracker.step(detections, parts_feats, frame_count)
+        low_conf_detections = [[float(b) for b in bb] for bb in low_boxes]
+        tracks = tracker.step(
+            detections,
+            parts_feats,
+            frame_count,
+            low_conf_detections=low_conf_detections,
+        )
 
         out_frame = frame.copy()
         live_confirmed = 0
@@ -277,10 +293,16 @@ def run_image(args):
     print(f"[INFO] Input  : {input_path}")
 
     yolo     = _load_yolo(device)
-    embedder = PartEmbedder(device=device, num_parts=NUM_PARTS)
+    embedder = PartEmbedder(
+        device=device,
+        num_parts=NUM_PARTS,
+        backbone=args.backbone,
+        use_part_embedding=args.use_part_embedding,
+    )
 
     if not embedder.available:
-        print("[WARNING] PartEmbedder failed to load ResNet50 — using random fallback embeddings.")
+        print("[ERROR] PartEmbedder failed to load. Refusing to emit random fallback embeddings.")
+        return 1
 
     frame = cv2.imread(str(input_path))
     if frame is None:
@@ -314,7 +336,10 @@ def run_image(args):
         print(f"    Size   : {(x2 - x1):.0f} x {(y2 - y1):.0f} px")
 
         parts = embedder.extract(frame, box)
-        print(f"    Parts  : {len(parts)} embeddings (each 2048D)")
+        print(f"    Parts  : {len(parts)} embeddings (each {embedder.feature_dim}D)")
+        if not parts:
+            print("    [WARN] Embedding extraction returned no features for this box.")
+            continue
         for pi, p in enumerate(parts):
             norm = float(np.linalg.norm(p))
             print(f"      Part {pi + 1}: norm={norm:.6f}  (should be ~1.0)")
@@ -369,6 +394,9 @@ def _run_gallery_comparison(args, device, embedder, queries):
             best_box = [float(v) for v in gboxes[best_idx, :4]]
 
         gparts = embedder.extract(gframe, best_box)
+        if not gparts:
+            print(f"  [WARN] Could not embed gallery image {gpath.name}")
+            continue
         garr   = np.stack(gparts, axis=0)
         gembed = l2_normalize_vec(np.mean(garr, axis=0))
         gallery_embeddings.append((gpath.name, gembed))
@@ -407,6 +435,14 @@ def _build_parser():
     p.add_argument("--max-age",    type=int,   default=MAX_AGE,             dest="max_age")
     p.add_argument("--min-hits",   type=int,   default=MIN_HITS_TO_CONFIRM, dest="min_hits")
     p.add_argument("--device",     default=None, choices=["cuda", "cpu"])
+    p.add_argument(
+        "--backbone",
+        default=REID_BACKBONE,
+        choices=["osnet_x0_25", "osnet_x1_0", "resnet50"],
+        help="ReID backbone (default: tracker.config.REID_BACKBONE)",
+    )
+    p.add_argument("--use-part-embedding", action="store_true", dest="use_part_embedding")
+    p.add_argument("--disable-gallery", action="store_true")
     p.add_argument("--verbose",    action="store_true")
     return p
 

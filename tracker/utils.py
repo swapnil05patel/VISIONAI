@@ -51,7 +51,17 @@ def cosine_distance_vec(a: np.ndarray, b: np.ndarray) -> float:
     """
     Cosine distance between two L2-normalized vectors.
     Returns 0 for identical vectors, 1 for orthogonal, 2 for opposite.
+    Incompatible shapes, empty vectors, or non-finite values return 1.0
+    (treated as unmatched) rather than raising.
     """
+    if a is None or b is None:
+        return 1.0
+    a = np.asarray(a, dtype=np.float32).reshape(-1)
+    b = np.asarray(b, dtype=np.float32).reshape(-1)
+    if a.size == 0 or b.size == 0 or a.shape != b.shape:
+        return 1.0
+    if not np.isfinite(a).all() or not np.isfinite(b).all():
+        return 1.0
     return 1.0 - float(np.dot(a, b))
 
 

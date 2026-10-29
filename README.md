@@ -1,6 +1,8 @@
-# Multi-Camera Person Detection & Re-Identification
+# Person Detection, Tracking, and Re-Identification
 
-A modular, production-ready person tracking system built with YOLO11, part-based Re-Identification (ReID), Kalman filtering, Hungarian assignment, and a persistent Track Gallery. Deployed as an interactive Streamlit web application.
+A modular person tracking system built with YOLO11, pretrained OSNet ReID embeddings (ResNet50 baseline), Kalman filtering, Hungarian assignment, optional ByteTrack-style low-confidence association, and a persistent Track Gallery. Deployed as an interactive Streamlit web application.
+
+This is a research/engineering codebase. It is **not** claimed production-ready. Single-camera long-term re-identification is implemented; **cross-camera ReID is not implemented or validated**.
 
 **Live demo:**  https://person-reid-multicamera.streamlit.app/
 
@@ -16,6 +18,8 @@ A modular, production-ready person tracking system built with YOLO11, part-based
 - [Project Structure](#project-structure)
 - [Quick Start from GitHub](#quick-start-from-github)
 - [Configuration](#configuration)
+- [Evaluation](#evaluation)
+- [Limitations](#limitations)
 - [Outputs](#outputs)
 - [Hardware Requirements](#hardware-requirements)
 
@@ -27,7 +31,7 @@ Standard object trackers fail under real-world surveillance conditions. Occlusio
 
 **Core capabilities:**
 - Consistent person IDs throughout the video, even across occlusions
-- Re-identification of returning persons using a persistent Track Gallery
+- Re-identification of returning persons in the **same camera/view** using a persistent Track Gallery
 - **Fast-motion handling:** Dynamic search radiuses and momentum-based direction consistency
 - **Static object filtering:** Automatically detects and ignores non-moving human-like objects (e.g. posters/mannequins)
 - All parameters tunable live via a Streamlit sidebar — no code changes needed
@@ -51,7 +55,8 @@ app.py  ->  ui/*  ->  tracker/*
 |---|---|
 | `tracker/config.py` | Single source of truth for all tunable constants |
 | `tracker/utils.py` | Pure stateless math utilities (IoU, box conversions, cosine distance) |
-| `tracker/embedder.py` | Part-based ResNet50 feature extractor |
+| `tracker/embedder.py` | OSNet / ResNet50 appearance embedder (full-body or part strips) |
+| `tracker/osnet.py` | Omni-Scale Network definition and MSMT17 weight loading |
 | `tracker/kalman.py` | Constant-velocity Kalman filter |
 | `tracker/track.py` | Per-track state manager (Kalman state, embedding cache, lifecycle) |
 | `tracker/gallery.py` | Persistent appearance gallery with gated retrieval |
@@ -72,8 +77,10 @@ YOLO11m scans the frame for all persons (class 0). Two confidence thresholds are
 - **Low threshold** (default 0.12): passed to YOLO as the prediction floor.
 - **High threshold** (default 0.45): gate applied after YOLO returns — only detections above this are passed to the tracker.
 
-### Step 2 — Part-based Feature Extraction
-Each detection bounding box is divided into 3 horizontal strips (head, torso, legs). Each strip is passed through **ResNet50** (ImageNet pretrained, classification head removed) to produce a **2048-dimensional L2-normalized feature vector**. Using part-level features instead of a single global embedding makes the system more robust to partial occlusion — if the head is hidden, the torso and legs still contribute to matching.
+### Step 2 — Appearance Feature Extraction
+The default backbone is **OSNet-x0.25** trained on MSMT17 (`512-D` L2-normalized embeddings). **ResNet50** (ImageNet, `2048-D`) remains available as a baseline via `REID_BACKBONE=resnet50`.
+
+When `USE_PART_EMBEDDING=True`, each box is split into `NUM_PARTS` horizontal strips and each strip is embedded separately. The default is full-body (`USE_PART_EMBEDDING=False`). Invalid crops, missing weights, and non-finite features return no embedding; random fallbacks are not used.
 
 ### Step 3 — Kalman Prediction
 Each active track runs a **Kalman filter** with an 8-dimensional state vector:
@@ -106,8 +113,8 @@ Accepted matches trigger a **Kalman correction** (measurement update) on the tra
 - Slow-moving tracks use high alpha (0.70) for stable, jitter-free boxes.
 - Fast-moving tracks use low alpha (0.18) for responsive, accurate boxes.
 
-### Step 8 — Fallback IoU Attach
-Unmatched detections are compared against lost tracks using raw IoU on the **smoothed box** (not Kalman-predicted box). If overlap exceeds 0.18 and center distance is within 160px, the detection is attached to that track. This prevents new ID creation when Hungarian rejected a moderate-overlap pair because a better competing assignment existed.
+### Step 8 — ByteTrack stage-2 then fallback IoU
+Unmatched tracks are first associated with **low-confidence** detections by IoU (`ENABLE_BYTETRACK_STAGE2`). Remaining unmatched **high-confidence** detections are then compared against lost tracks using IoU on the smoothed box (`FALLBACK_IOU_FOR_NEW`). Low-confidence boxes never spawn new IDs.
 
 ### Step 9 — Gallery Query
 Still-unmatched detections query the **Track Gallery** (see below). If a retired track matches by appearance and all spatial gates pass, it is **revived with its original ID**. This is what makes long-term re-identification possible.
@@ -127,26 +134,26 @@ The Track Gallery enables re-identification of persons returning after long abse
 ### Storage (on track retirement)
 
 1. Tracks with fewer than `GALLERY_MIN_HITS` detections are not saved — they are too unreliable.
-2. The track's cached embeddings are averaged into a single **2048D L2-normalized vector** (optionally confidence-weighted).
-3. The vector is stored alongside: last known center position, last bounding box area, retirement timestamp, and hit count.
-4. If the gallery is at capacity (100 entries), the oldest entry is evicted first.
+2. Appearance is stored according to `GALLERY_REPRESENTATION`: mean, EMA, or a small set of exemplars (`512-D` for OSNet, `2048-D` for ResNet50).
+3. Metadata stored with the vector(s): last known center, last box area, retirement timestamp, hit count.
+4. If the gallery is at capacity (`GALLERY_MAX_SIZE`), the oldest unlocked entry is evicted first.
 
 ### Retrieval (4-gate pipeline)
 
-When a new detection cannot be matched to any active track, the gallery is queried. To avoid expensive 2048D cosine computation on every entry, three cheap gates run first:
+When a new detection cannot be matched to any active track, the gallery is queried. Cheap gates run first:
 
 | Gate | Check | Cost |
 |---|---|---|
-| 1. TTL | Entry older than 600 seconds? Skip. | O(1) |
-| 2. Spatial | Last known center > 160px from detection center? Skip. | O(1) |
-| 3. Area ratio | Box area differs by > 2.5x? Skip. | O(1) |
-| 4. Cosine | Distance below `GALLERY_COSINE_THRESH` (0.38)? Match. | O(D) |
+| 1. TTL | Entry older than `GALLERY_TTL_SECONDS`? Skip. | O(1) |
+| 2. Spatial | Optional (`GALLERY_USE_SPATIAL_GATE`). Last center farther than `GALLERY_SPATIAL_MAX_DIST`? Skip. | O(1) |
+| 3. Area ratio | Box area differs by more than `GALLERY_AREA_RATIO_MAX`? Skip. | O(1) |
+| 4. Cosine | Distance below `GALLERY_COSINE_THRESH`. Mean/EMA or min-exemplar distance. | O(D) |
 
 In typical scenes, gates 1–3 eliminate 90%+ of gallery entries. Cosine runs on only the small remaining set.
 
 ### Re-attachment
 
-On a gallery match, a new `Track` object is created with the **original track ID** (not `next_id`). The track is marked confirmed immediately. The gallery entry is removed to prevent double-assignment.
+On a gallery match, a track is revived with the **original track ID**. It is confirmed only after `REVIVAL_CONFIRMATION_FRAMES` consecutive matches (the gallery entry stays locked until then). Spatial gating assumes the person reappears near the last location; disable `GALLERY_USE_SPATIAL_GATE` only if you accept matches anywhere in the frame. That is still **not** multi-camera association.
 
 ---
 
@@ -163,11 +170,20 @@ Real-Time Multi-Camera Person Detection & Re-Identification/
 │   ├── __init__.py
 │   ├── config.py            All tunable constants — edit here to change behaviour
 │   ├── utils.py             Pure utility functions: iou, box ops, cosine distance
-│   ├── embedder.py          PartEmbedder: ResNet50 per-body-part feature extraction
+│   ├── osnet.py             OSNet architecture + MSMT17 checkpoint loading
+│   ├── embedder.py          PartEmbedder: OSNet or ResNet50 features
 │   ├── kalman.py            KalmanBox: constant-velocity Kalman filter
 │   ├── track.py             Track: per-track state, embedding cache, smoothing
 │   ├── gallery.py           TrackGallery: save, gated query, TTL eviction
 │   └── reid_tracker.py      PersonReIDTracker: 11-step per-frame pipeline
+│
+├── evaluation/
+│   ├── evaluate.py          MOT / synthetic evaluation entry point
+│   ├── mot_metrics.py       IDF1, HOTA, MOTA, IDSW, fragmentation
+│   └── results.md           Written by evaluate.py from actual runs
+│
+├── tests/
+│   └── test_*.py            Unit / integration / metric tests
 │
 └── ui/
     ├── __init__.py
@@ -184,7 +200,7 @@ Real-Time Multi-Camera Person Detection & Re-Identification/
 ### 1. Clone the repository
 
 ```bash
-git clonehttps://github.com/prxsnn/person-reid-multicamera.git
+git clone https://github.com/prxsnn/person-reid-multicamera.git
 cd person-reid-multicamera
 ```
 
@@ -245,6 +261,16 @@ All parameters are defined in `tracker/config.py` and exposed as live controls i
 | `HIGH_CONF_THR` | 0.45 | Minimum YOLO confidence to pass a detection to the tracker |
 | `LOW_CONF_THR` | 0.12 | YOLO prediction confidence floor |
 
+### ReID backbone
+
+| Parameter | Default | Description |
+|---|---|---|
+| `REID_BACKBONE` | `osnet_x0_25` | `osnet_x0_25`, `osnet_x1_0`, or `resnet50` |
+| `USE_PART_EMBEDDING` | `False` | `True` = horizontal part strips; `False` = full-body crop |
+| `NUM_PARTS` | 3 | Strip count when part embeddings are enabled |
+
+Place OSNet checkpoints in `weights/` (for example `weights/osnet_x0_25_msmt17.pth`). Missing files are downloaded from HuggingFace on first use, or initialization fails.
+
 ### Matching
 
 | Parameter | Default | Description |
@@ -256,6 +282,10 @@ All parameters are defined in `tracker/config.py` and exposed as live controls i
 | `DIRECTION_SPEED_THRESH` | 3.0 | Minimum pixels/frame to trigger direction penalty |
 | `VELOCITY_GATE_MULTIPLIER`| 1.5 | How much speed scales the reattachment search area |
 | `REID_CENTER_MAX_DIST_BASE`| 160 | Base pixel distance for ReID spatial gate |
+| `ENABLE_BYTETRACK_STAGE2` | `True` | Associate leftover tracks with low-confidence boxes by IoU |
+| `STAGE2_IOU_THR` | 0.40 | IoU threshold for that second stage |
+
+Similarity thresholds (`REID_STRICT_THRESH`, `GALLERY_COSINE_THRESH`) should be changed only with validation evidence. Defaults were not retuned in this pass.
 
 ### Track Lifecycle
 
@@ -269,10 +299,58 @@ All parameters are defined in `tracker/config.py` and exposed as live controls i
 
 | Parameter | Default | Description |
 |---|---|---|
-| `GALLERY_COSINE_THRESH` | 0.38 | Max cosine distance for gallery re-attachment |
+| `ENABLE_GALLERY` | `True` | Master switch for long-term gallery recovery |
+| `GALLERY_COSINE_THRESH` | 0.35 | Max cosine distance for gallery re-attachment |
 | `GALLERY_TTL_SECONDS` | 600 | Gallery entry expires after this many seconds |
-| `GALLERY_MAX_SIZE` | 100 | Maximum gallery entries |
+| `GALLERY_MAX_SIZE` | 1000 | Maximum gallery entries |
 | `GALLERY_MIN_HITS` | 2 | Minimum hits for a track to be saved to gallery |
+| `GALLERY_USE_SPATIAL_GATE` | `True` | Require last position near the query box |
+| `GALLERY_REPRESENTATION` | `mean` | `mean`, `ema`, or `exemplars` |
+| `REVIVAL_CONFIRMATION_FRAMES` | 2 | Consecutive matches before a revived ID is confirmed |
+| `ENABLE_STATIC_PRUNING` | `True` | Drop tracks that never move |
+
+## Evaluation
+
+```bash
+# Built-in synthetic sequence (GT boxes + real embeddings from generated frames)
+python evaluation/evaluate.py --synthetic --out evaluation/results.md
+
+# Full ablation (all 4 configs on the same sequence)
+python evaluation/evaluate.py --synthetic --ablate --out evaluation/results.md
+
+# MOT-format sequence (folder with img1/ and gt/gt.txt)
+python evaluation/evaluate.py --seq /path/to/MOT17-02-FRCNN
+
+# Disable gallery
+python evaluation/evaluate.py --synthetic --disable-gallery
+
+# ResNet50 baseline
+python evaluation/evaluate.py --synthetic --backbone resnet50
+```
+
+The evaluator writes MOT-format predictions under `evaluation/preds/` and metrics to `evaluation/results.md`. Detection quality is not mixed in when GT boxes are used as the detection source (tracker-only). TrackEval is used only if it is installed (`pip install trackeval`); otherwise `evaluation/mot_metrics.py` reports IDF1, HOTA, MOTA, ID switches, fragmentation, and FPS.
+
+### Measured results (synthetic sequence, CPU, GT boxes as detections)
+
+| Config | HOTA | IDF1 | MOTA | IDSW | FPS |
+|--------|------|------|------|------|-----|
+| OSNet-x0.25 + gallery | 0.7521 | 0.8571 | 0.7167 | 0 | ~21 |
+| OSNet-x0.25 no gallery | 0.7521 | 0.8571 | 0.7167 | 0 | ~14 |
+| OSNet-x0.25 + parts | 0.7521 | 0.8571 | 0.7167 | 0 | ~13 |
+| ResNet50 + gallery | 0.7521 | 0.8571 | 0.7167 | 0 | ~12 |
+
+All configs produce identical accuracy on the synthetic sequence (expected — the sequence is too simple to differentiate backbone quality). FPS differences are real and reflect computational cost. See `evaluation/results.md` for full details and interpretation.
+
+```bash
+pytest tests -q
+```
+
+## Limitations
+
+- **No camera-motion compensation.** A moving camera will inflate Kalman motion and can break IoU/spatial gates.
+- **No cross-camera association.** There is no camera ID, no shared global gallery across views, and no calibrated homography. Spatial gallery gating assumes the same image coordinates.
+- **No production SLO.** Latency, identity stability, and detector quality depend on hardware, video, and thresholds.
+- **Thresholds.** ReID cosine thresholds were not recalibrated on a labeled validation set in this work.
 
 ---
 
@@ -306,7 +384,7 @@ All parameters are defined in `tracker/config.py` and exposed as live controls i
 | RAM | 16 GB | 8 GB |
 | Storage | SSD | HDD |
 
-Processing is supported on CPU but will run significantly slower (under 5 fps) and is not suitable for real-time use. The GPU is used by both YOLO11 detection and ResNet50 feature extraction.
+Processing is supported on CPU but will run significantly slower (often under 5 fps) and is not suitable for real-time use. The GPU is used by YOLO11 detection and the ReID backbone (OSNet by default).
 
 **Processing time estimate:**
 ```

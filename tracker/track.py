@@ -26,42 +26,27 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-try:
-    from tracker.config import (
-        EMBED_CACHE_SIZE,
-        MIN_HITS_TO_CONFIRM,
-        SMOOTH_ALPHA_SLOW,
-        SMOOTH_ALPHA_FAST,
-        EXIT_MARGIN,
-        STATIC_VELOCITY_THRESH,
-        STATIC_DISPLACEMENT_THRESH,
-        STATIC_FRAMES_REQUIRED,
-    )
-    from tracker.kalman import KalmanBox
-    from tracker.utils import (
-        box_xyxy_to_xywh,
-        box_xywh_to_xyxy,
-        l2_normalize_vec,
-        center_of,
-    )
-except (ImportError, ModuleNotFoundError):
-    from config import (
-        EMBED_CACHE_SIZE,
-        MIN_HITS_TO_CONFIRM,
-        SMOOTH_ALPHA_SLOW,
-        SMOOTH_ALPHA_FAST,
-        EXIT_MARGIN,
-        STATIC_VELOCITY_THRESH,
-        STATIC_DISPLACEMENT_THRESH,
-        STATIC_FRAMES_REQUIRED,
-    )
-    from kalman import KalmanBox
-    from utils import (
-        box_xyxy_to_xywh,
-        box_xywh_to_xyxy,
-        l2_normalize_vec,
-        center_of,
-    )
+from tracker.config import (
+    EMBED_CACHE_SIZE,
+    MIN_HITS_TO_CONFIRM,
+    SMOOTH_ALPHA_SLOW,
+    SMOOTH_ALPHA_FAST,
+    EXIT_MARGIN,
+    STATIC_VELOCITY_THRESH,
+    STATIC_DISPLACEMENT_THRESH,
+    STATIC_FRAMES_REQUIRED,
+    GALLERY_EMA_ALPHA,
+    GALLERY_MAX_EXEMPLARS,
+    GALLERY_EXEMPLAR_MIN_DIST,
+)
+from tracker.kalman import KalmanBox
+from tracker.utils import (
+    box_xyxy_to_xywh,
+    box_xywh_to_xyxy,
+    l2_normalize_vec,
+    center_of,
+    cosine_distance_vec,
+)
 
 
 
@@ -228,6 +213,45 @@ class Track:
             mean = np.mean(arr, axis=0)
 
         return l2_normalize_vec(mean)
+
+    def get_ema_embedding(self, alpha: float = GALLERY_EMA_ALPHA) -> Optional[np.ndarray]:
+        """Return an EMA of cached embeddings in insertion order, L2-normalized."""
+        if not self.embeds:
+            return None
+        ema = None
+        decay = float(np.clip(alpha, 0.0, 1.0))
+        for emb in self.embeds:
+            if not np.isfinite(emb).all():
+                continue
+            if ema is None:
+                ema = emb.astype(np.float32)
+            else:
+                ema = decay * ema + (1.0 - decay) * emb.astype(np.float32)
+        if ema is None or not np.isfinite(ema).all():
+            return None
+        return l2_normalize_vec(ema)
+
+    def get_exemplars(
+        self,
+        max_exemplars: int = GALLERY_MAX_EXEMPLARS,
+        min_dist: float = GALLERY_EXEMPLAR_MIN_DIST,
+    ) -> List[np.ndarray]:
+        """Select diverse cached embeddings as gallery exemplars."""
+        exemplars: List[np.ndarray] = []
+        for emb in self.embeds:
+            if emb is None or not np.isfinite(emb).all():
+                continue
+            if not exemplars:
+                exemplars.append(emb.astype(np.float32))
+                continue
+            nearest = min(cosine_distance_vec(emb, ex) for ex in exemplars)
+            if nearest >= min_dist:
+                exemplars.append(emb.astype(np.float32))
+            if len(exemplars) >= max_exemplars:
+                break
+        if not exemplars and self.embeds:
+            exemplars.append(np.asarray(self.embeds[-1], dtype=np.float32))
+        return exemplars[:max_exemplars]
 
     # ------------------------------------------------------------------
     # Static object detection

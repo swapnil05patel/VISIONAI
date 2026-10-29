@@ -156,13 +156,18 @@ def run_tracking_pipeline(uploaded_video, settings: dict):
 
             all_boxes      = results[0].boxes.data.cpu().numpy()
             high_conf_mask = all_boxes[:, 4] >= high_conf_thr
+            low_conf_mask = (all_boxes[:, 4] >= low_conf_thr) & (all_boxes[:, 4] < high_conf_thr)
             high_conf_boxes = (
                 all_boxes[high_conf_mask][:, :4]
                 if high_conf_mask.any()
                 else np.array([]).reshape(0, 4)
             )
+            low_conf_boxes = (
+                all_boxes[low_conf_mask][:, :4]
+                if low_conf_mask.any()
+                else np.array([]).reshape(0, 4)
+            )
 
-            # Extract part embeddings for each high-confidence detection
             detections  = []
             parts_feats = []
             for bb in high_conf_boxes:
@@ -172,12 +177,13 @@ def run_tracking_pipeline(uploaded_video, settings: dict):
                     detections.append(box)
                     parts_feats.append(parts)
 
-            # Only call tracker if there are detections to process
-            if detections:
-                tracks = tracker.step(detections, parts_feats, frame_count)
-            else:
-                # No high-confidence detections — still advance Kalman predictions
-                tracks = tracker.step([], [], frame_count)
+            low_conf_detections = [[float(b) for b in bb[:4]] for bb in low_conf_boxes]
+            tracks = tracker.step(
+                detections,
+                parts_feats,
+                frame_count,
+                low_conf_detections=low_conf_detections,
+            )
 
             # Draw confirmed tracks
             live_confirmed = 0
